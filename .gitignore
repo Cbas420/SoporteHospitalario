@@ -1,0 +1,55 @@
+# Python cache and test artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local tooling caches
+.keras/
+.keras_cache/
+.matplotlib/
+.ipynb_checkpoints/
+
+# Environment files and secrets
+.env
+.env.*
+*.env
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Runtime outputs
+logs/
+*.log
+
+# Local storage and service volumes
+mnt/
+
+# Training artifacts and generated models
+models/
+
+# Generated or local datasets
+data/raw/
+data/processed/
+data/sample/
+data/predictions.jsonl
+data/alerts.jsonl
+
+# Build artifacts
+dist/
+build/
+*.egg-info/

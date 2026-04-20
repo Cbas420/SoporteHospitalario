@@ -1,0 +1,33 @@
+# Framework de Deep Learning
+tensorflow==2.15.0; platform_system != "Windows"
+tensorflow-intel==2.15.0; platform_system == "Windows"
+
+# API REST
+fastapi==0.109.0
+uvicorn==0.27.0
+python-multipart==0.0.6
+
+# Procesamiento de datos
+numpy==1.26.3
+pandas==2.1.4
+Pillow==10.2.0
+
+# Visualizacion
+matplotlib==3.8.2
+seaborn==0.13.1
+streamlit==1.37.1
+streamlit-autorefresh==1.0.1
+
+# Persistencia e integracion
+SQLAlchemy==2.0.29
+psycopg[binary]==3.1.18
+minio==7.2.7
+requests==2.32.3
+httpx==0.27.0
+
+# Automatizacion
+APScheduler==3.10.4
+
+# Utilidades
+pydantic==2.5.3
+pytest==8.3.2

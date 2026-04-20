@@ -1,0 +1,235 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: hospital-db
+    environment:
+      POSTGRES_DB: hospital
+      POSTGRES_USER: hospital
+      POSTGRES_PASSWORD: hospital
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./mnt/postgres:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hospital -d hospital"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - hospital-network
+
+  minio:
+    image: minio/minio:RELEASE.2024-07-16T23-46-41Z
+    container_name: hospital-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ./mnt/minio:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - hospital-network
+
+  minio-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hospital-minio-init
+    command: python scripts/init_minio_buckets.py
+    environment:
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_SECURE: "false"
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - hospital-network
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hospital-api
+    command: python -m uvicorn src.api.app:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      API_BASE_URL: http://api:8000
+      DATABASE_URL: postgresql://hospital:hospital@db:5432/hospital
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: medical-images
+      MINIO_BUCKET_RAW: raw-xrays
+      MINIO_BUCKET_MASKS: lung-masks
+      MINIO_BUCKET_PROCESSED: processed-xrays
+      MINIO_BUCKET_QUARANTINE: quarantine
+      MINIO_BUCKET_REPORTS: reports
+      MINIO_SECURE: "false"
+      COVID_CRITICAL_THRESHOLD: "0.85"
+      COVID_WARNING_THRESHOLD: "0.60"
+      LOG_LEVEL: INFO
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - hospital-network
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hospital-dashboard
+    command: streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0
+    ports:
+      - "8501:8501"
+    environment:
+      API_BASE_URL: http://api:8000
+      DASHBOARD_REFRESH_SECONDS: 10
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./logs:/app/logs
+    depends_on:
+      api:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - hospital-network
+
+  automation:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hospital-automation
+    command: python -m src.automation.scheduler --interval 300
+    environment:
+      DATABASE_URL: postgresql://hospital:hospital@db:5432/hospital
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: medical-images
+      MINIO_SECURE: "false"
+      API_BASE_URL: http://api:8000
+      COVID_CRITICAL_THRESHOLD: "0.85"
+      COVID_WARNING_THRESHOLD: "0.60"
+      LOG_LEVEL: INFO
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_started
+    healthcheck:
+      disable: true
+    networks:
+      - hospital-network
+
+  watchdog:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hospital-watchdog
+    command: python -m src.automation.watchdog_service
+    environment:
+      DATABASE_URL: postgresql://hospital:hospital@db:5432/hospital
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_SECURE: "false"
+      API_BASE_URL: http://api:8000
+      COVID_CRITICAL_THRESHOLD: "0.85"
+      COVID_WARNING_THRESHOLD: "0.60"
+      LOG_LEVEL: INFO
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_started
+    healthcheck:
+      disable: true
+    networks:
+      - hospital-network
+
+  ai-train:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hospital-ai-train
+    command: python train_pipeline.py --epochs 20 --finetune-epochs 15
+    environment:
+      DATABASE_URL: postgresql://hospital:hospital@db:5432/hospital
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: medical-images
+      MINIO_SECURE: "false"
+      BATCH_SIZE: 32
+      EPOCHS: 20
+      LOG_LEVEL: INFO
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+    depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    profiles:
+      - training
+    networks:
+      - hospital-network
+
+  ai-sample-data:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hospital-ai-sample-data
+    command: python generate_sample_data.py --num-per-class 50
+    volumes:
+      - ./data:/app/data
+    profiles:
+      - setup
+    networks:
+      - hospital-network
+
+networks:
+  hospital-network:
+    name: hospital-network
+    driver: bridge
