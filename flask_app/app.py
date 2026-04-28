@@ -21,8 +21,8 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = "hospital-ai-secret-key-2026"
 
 # API Endpoints (use environment variables for Docker compatibility)
-RADIOLOGY_API = os.getenv("RADIOLOGY_API_URL", "http://localhost:8000")
-CLINICAL_API = os.getenv("CLINICAL_API_URL", "http://localhost:8001")
+RADIOLOGY_API = os.getenv("RADIOLOGY_API", "http://localhost:8000")
+CLINICAL_API = os.getenv("CLINICAL_API", "http://localhost:8001")
 
 
 # ============================================================================

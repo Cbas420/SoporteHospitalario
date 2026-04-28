@@ -95,8 +95,9 @@ services:
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
-      timeout: 10s
+      timeout: 30s
       retries: 5
+      start_period: 180s
     networks:
       - hospital-network
 
