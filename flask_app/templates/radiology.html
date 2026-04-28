@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Radiología - Hospital AI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <i class="fas fa-hospital"></i>
+                <span>Hospital AI System</span>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-link"><i class="fas fa-home"></i> Inicio</a>
+                <a href="/radiology" class="nav-link active"><i class="fas fa-x-ray"></i> Radiología</a>
+                <a href="/clinical" class="nav-link"><i class="fas fa-stethoscope"></i> Clínica</a>
+                <a href="/patients" class="nav-link"><i class="fas fa-users"></i> Pacientes</a>
+                <a href="/alerts" class="nav-link"><i class="fas fa-exclamation-triangle"></i> Alertas</a>
+                <a href="/api-info" class="nav-link"><i class="fas fa-info-circle"></i> API Info</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="header-section">
+            <h1><i class="fas fa-x-ray"></i> Clasificación de Radiografías</h1>
+            <p class="subtitle">Sube una radiografía de tórax para clasificación automática</p>
+        </div>
+
+        <!-- Upload Section -->
+        <div class="card" style="max-width: 800px; margin: 0 auto 2rem;">
+            <div class="card-header">
+                <h2><i class="fas fa-upload"></i> Subir Radiografía</h2>
+            </div>
+            <div class="card-body">
+                <form id="uploadForm" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label for="patientId"><i class="fas fa-id-card"></i> ID del Paciente (opcional)</label>
+                        <input type="text" id="patientId" name="patient_id" class="form-control" placeholder="Ej: PAC-001">
+                    </div>
+
+                    <div class="upload-zone" id="dropZone">
+                        <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                        <p>Arrastra una imagen aquí o haz clic para seleccionar</p>
+                        <p class="text-muted">Formatos: JPG, PNG, BMP</p>
+                        <input type="file" id="fileInput" name="file" accept=".jpg,.jpeg,.png,.bmp" hidden>
+                    </div>
+
+                    <div id="previewContainer" style="display: none;" class="mt-3">
+                        <h3>Vista previa:</h3>
+                        <img id="imagePreview" class="preview-img" alt="Preview">
+                        <button type="button" class="btn btn-secondary" onclick="clearImage()">
+                            <i class="fas fa-times"></i> Cambiar imagen
+                        </button>
+                    </div>
+
+                    <div class="form-actions mt-3">
+                        <button type="submit" class="btn btn-primary" id="submitBtn">
+                            <i class="fas fa-search"></i> Clasificar Radiografía
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Loading -->
+                <div id="loadingDiv" style="display: none;" class="text-center mt-3">
+                    <div class="spinner"></div>
+                    <p>Procesando imagen...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Result -->
+        <div id="resultDiv" style="display: none;" class="card" style="max-width: 800px; margin: 0 auto;">
+            <div class="card-header">
+                <h2><i class="fas fa-clipboard-check"></i> Resultado del Diagnóstico</h2>
+            </div>
+            <div class="card-body">
+                <div class="result-grid">
+                    <div class="result-main">
+                        <h3>Diagnóstico Predicho:</h3>
+                        <div id="predictionBadge" class="badge badge-large">-</div>
+                        
+                        <div class="confidence-meter mt-3">
+                            <label>Confianza:</label>
+                            <div class="progress-bar">
+                                <div id="confidenceBar" class="progress-fill"></div>
+                            </div>
+                            <span id="confidenceText">0%</span>
+                        </div>
+
+                        <div id="reviewWarning" style="display: none;" class="alert alert-warning mt-3">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <strong>Atención:</strong> Esta predicción requiere revisión manual.
+                        </div>
+                    </div>
+
+                    <div class="result-details">
+                        <h3>Probabilidades por clase:</h3>
+                        <div id="probabilitiesList" class="prob-list">
+                            <!-- Filled by JS -->
+                        </div>
+
+                        <div class="meta-info mt-3">
+                            <p><i class="fas fa-clock"></i> Tiempo: <span id="inferenceTime">-</span> ms</p>
+                            <p><i class="fas fa-calendar"></i> Fecha: <span id="predictionTime">-</span></p>
+                            <p><i class="fas fa-id-card"></i> Paciente: <span id="resultPatientId">-</span></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error -->
+        <div id="errorDiv" style="display: none;" class="alert alert-danger">
+            <i class="fas fa-exclamation-circle"></i>
+            <strong>Error:</strong> <span id="errorMessage"></span>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>Hospital AI System &copy; 2026 | Sistema Inteligente de Soporte Hospitalario</p>
+    </footer>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const previewContainer = document.getElementById('previewContainer');
+        const imagePreview = document.getElementById('imagePreview');
+        const uploadForm = document.getElementById('uploadForm');
+
+        // Drag and drop
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startswith('image/')) {
+                handleFile(file);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) handleFile(file);
+        });
+
+        function handleFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.src = e.target.result;
+                previewContainer.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function clearImage() {
+            fileInput.value = '';
+            previewContainer.style.display = 'none';
+            imagePreview.src = '';
+        }
+
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const file = fileInput.files[0];
+            if (!file) {
+                showError('Por favor selecciona una imagen');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const patientId = document.getElementById('patientId').value;
+            if (patientId) formData.append('patient_id', patientId);
+
+            document.getElementById('loadingDiv').style.display = 'block';
+            document.getElementById('resultDiv').style.display = 'none';
+            document.getElementById('errorDiv').style.display = 'none';
+
+            try {
+                const response = await fetch('/radiology/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'Error en la predicción');
+                }
+
+                showResult(result);
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                document.getElementById('loadingDiv').style.display = 'none';
+            }
+        });
+
+        function showResult(data) {
+            const pred = data.prediction;
+            const conf = data.confidence;
+
+            // Badge
+            const badge = document.getElementById('predictionBadge');
+            badge.textContent = pred;
+            badge.className = 'badge badge-large ' + 
+                (pred === 'COVID19' ? 'badge-danger' : 
+                 pred === 'Pneumonia' ? 'badge-warning' : 'badge-success');
+
+            // Confidence
+            document.getElementById('confidenceBar').style.width = (conf * 100) + '%';
+            document.getElementById('confidenceText').textContent = (conf * 100).toFixed(1) + '%';
+
+            // Review warning
+            if (data.requires_review) {
+                document.getElementById('reviewWarning').style.display = 'block';
+            }
+
+            // Probabilities
+            const probList = document.getElementById('probabilitiesList');
+            probList.innerHTML = '';
+            for (const [cls, prob] of Object.entries(data.probabilities)) {
+                const pct = (prob * 100).toFixed(1);
+                const clsClass = cls === 'COVID19' ? 'danger' : cls === 'Pneumonia' ? 'warning' : 'success';
+                probList.innerHTML += `
+                    <div class="prob-item">
+                        <span class="prob-label">${cls}</span>
+                        <div class="progress-bar">
+                            <div class="progress-fill bg-${clsClass}" style="width: ${pct}%"></div>
+                        </div>
+                        <span class="prob-value">${pct}%</span>
+                    </div>
+                `;
+            }
+
+            // Meta info
+            document.getElementById('inferenceTime').textContent = data.inference_time_ms || '-';
+            document.getElementById('predictionTime').textContent = data.timestamp ? data.timestamp.substring(0, 19) : '-';
+            document.getElementById('resultPatientId').textContent = data.patient_id || '-';
+
+            document.getElementById('resultDiv').style.display = 'block';
+        }
+
+        function showError(msg) {
+            document.getElementById('errorMessage').textContent = msg;
+            document.getElementById('errorDiv').style.display = 'block';
+        }
+    </script>
+</body>
+</html>

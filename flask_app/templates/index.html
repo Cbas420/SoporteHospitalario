@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hospital AI - Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <i class="fas fa-hospital"></i>
+                <span>Hospital AI System</span>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-link {% if active_page == 'home' %}active{% endif %}">
+                    <i class="fas fa-home"></i> Inicio
+                </a>
+                <a href="/radiology" class="nav-link {% if active_page == 'radiology' %}active{% endif %}">
+                    <i class="fas fa-x-ray"></i> Radiología
+                </a>
+                <a href="/clinical" class="nav-link {% if active_page == 'clinical' %}active{% endif %}">
+                    <i class="fas fa-stethoscope"></i> Clínica
+                </a>
+                <a href="/patients" class="nav-link {% if active_page == 'patients' %}active{% endif %}">
+                    <i class="fas fa-users"></i> Pacientes
+                </a>
+                <a href="/alerts" class="nav-link {% if active_page == 'alerts' %}active{% endif %}">
+                    <i class="fas fa-exclamation-triangle"></i> Alertas
+                </a>
+                <a href="/api-info" class="nav-link {% if active_page == 'api_info' %}active{% endif %}">
+                    <i class="fas fa-info-circle"></i> API Info
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Header -->
+        <div class="header-section">
+            <h1><i class="fas fa-hospital-alt"></i> Sistema de Soporte Hospitalario</h1>
+            <p class="subtitle">Dashboard en tiempo real para gestión de pacientes e inferencia</p>
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div class="kpi-content">
+                    <h3>{{ stats.get('patients_total', 0) }}</h3>
+                    <p>Pacientes</p>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                    <i class="fas fa-x-ray"></i>
+                </div>
+                <div class="kpi-content">
+                    <h3>{{ stats.get('predictions_total', 0) }}</h3>
+                    <p>Predicciones</p>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="kpi-content">
+                    <h3>{{ stats.get('alerts_total', 0) }}</h3>
+                    <p>Alertas Activas</p>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-icon" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                    <i class="fas fa-eye"></i>
+                </div>
+                <div class="kpi-content">
+                    <h3>{{ stats.get('low_confidence_total', 0) }}</h3>
+                    <p>Requieren Revisión</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="row">
+            <div class="card" style="flex: 1.3;">
+                <div class="card-header">
+                    <h2><i class="fas fa-chart-bar"></i> Distribución por Diagnóstico</h2>
+                </div>
+                <div class="card-body">
+                    <canvas id="diagnosisChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card" style="flex: 1;">
+                <div class="card-header">
+                    <h2><i class="fas fa-chart-pie"></i> Predicciones por Clase</h2>
+                </div>
+                <div class="card-body">
+                    <canvas id="predictionsChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="row">
+            <div class="card" style="flex: 1;">
+                <div class="card-header">
+                    <h2><i class="fas fa-history"></i> Predicciones Recientes</h2>
+                </div>
+                <div class="card-body">
+                    {% if recent_predictions %}
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Paciente</th>
+                                    <th>Diagnóstico</th>
+                                    <th>Confianza</th>
+                                    <th>Fecha</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for pred in recent_predictions %}
+                                <tr>
+                                    <td>{{ pred.patient_id or 'N/A' }}</td>
+                                    <td>
+                                        <span class="badge {% if pred.prediction == 'COVID19' %}badge-danger{% elif pred.prediction == 'Pneumonia' %}badge-warning{% else %}badge-success{% endif %}">
+                                            {{ pred.prediction }}
+                                        </span>
+                                    </td>
+                                    <td>{{ "%.1f%%"|format(pred.confidence * 100) }}</td>
+                                    <td>{{ pred.created_at[:10] if pred.created_at else 'N/A' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-muted">Sin predicciones recientes.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card" style="flex: 1;">
+                <div class="card-header">
+                    <h2><i class="fas fa-exclamation-circle"></i> Alertas Recientes</h2>
+                </div>
+                <div class="card-body">
+                    {% if alerts %}
+                    {% for alert in alerts[:5] %}
+                    <div class="alert-item alert-{{ alert.severity or 'info' }}">
+                        <i class="fas fa-{% if alert.severity == 'critical' %}times-circle{% elif alert.severity == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %}"></i>
+                        <div class="alert-content">
+                            <strong>{{ alert.patient_id or 'N/A' }}</strong>
+                            <p>{{ alert.message[:80] if alert.message else 'Sin mensaje' }}</p>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <p class="text-muted">No hay alertas activas.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>Hospital AI System &copy; 2026 | Sistema Inteligente de Soporte Hospitalario</p>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script>
+        // Diagnosis Chart
+        const diagnosisData = {{ stats.get('patients_by_diagnosis', {})|tojson }};
+        const diagLabels = Object.keys(diagnosisData);
+        const diagValues = Object.values(diagnosisData);
+
+        new Chart(document.getElementById('diagnosisChart'), {
+            type: 'bar',
+            data: {
+                labels: diagLabels,
+                datasets: [{
+                    label: 'Pacientes',
+                    data: diagValues,
+                    backgroundColor: ['#667eea', '#f5576c', '#4facfe'],
+                    borderRadius: 8,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        // Predictions Chart
+        const predData = {{ stats.get('predictions_by_class', {})|tojson }};
+        const predLabels = Object.keys(predData);
+        const predValues = Object.values(predData);
+
+        new Chart(document.getElementById('predictionsChart'), {
+            type: 'doughnut',
+            data: {
+                labels: predLabels,
+                datasets: [{
+                    data: predValues,
+                    backgroundColor: ['#f5576c', '#43e97b', '#4facfe'],
+                    borderWidth: 2,
+                }]
+            },
+            options: {
+                responsive: true,
+            }
+        });
+
+        // Auto-refresh every 30 seconds
+        setTimeout(() => location.reload(), 30000);
+    </script>
+</body>
+</html>

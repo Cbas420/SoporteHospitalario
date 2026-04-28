@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pacientes - Hospital AI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <i class="fas fa-hospital"></i>
+                <span>Hospital AI System</span>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-link"><i class="fas fa-home"></i> Inicio</a>
+                <a href="/radiology" class="nav-link"><i class="fas fa-x-ray"></i> Radiología</a>
+                <a href="/clinical" class="nav-link"><i class="fas fa-stethoscope"></i> Clínica</a>
+                <a href="/patients" class="nav-link active"><i class="fas fa-users"></i> Pacientes</a>
+                <a href="/alerts" class="nav-link"><i class="fas fa-exclamation-triangle"></i> Alertas</a>
+                <a href="/api-info" class="nav-link"><i class="fas fa-info-circle"></i> API Info</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="header-section">
+            <h1><i class="fas fa-users"></i> Gestión de Pacientes</h1>
+            <p class="subtitle">Lista de pacientes registrados en el sistema</p>
+        </div>
+
+        <!-- Filters -->
+        <div class="card">
+            <div class="card-header">
+                <h2><i class="fas fa-filter"></i> Filtros</h2>
+            </div>
+            <div class="card-body">
+                <div class="form-row">
+                    <div class="form-group" style="flex: 1;">
+                        <label for="searchInput"><i class="fas fa-search"></i> Buscar por ID</label>
+                        <input type="text" id="searchInput" class="form-control" placeholder="Ej: PAC-001" onkeyup="filterTable()">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label for="diagnosisFilter"><i class="fas fa-stethoscope"></i> Diagnóstico</label>
+                        <select id="diagnosisFilter" class="form-control" onchange="filterTable()">
+                            <option value="">Todos</option>
+                            <option value="COVID19">COVID-19</option>
+                            <option value="Normal">Sana</option>
+                            <option value="Pneumonia">Neumonía</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label for="limitSelect"><i class="fas fa-list-ol"></i> Mostrar</label>
+                        <select id="limitSelect" class="form-control" onchange="reloadTable()">
+                            <option value="50">50</option>
+                            <option value="100" selected>100</option>
+                            <option value="200">200</option>
+                            <option value="500">500</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Patients Table -->
+        <div class="card">
+            <div class="card-header">
+                <h2><i class="fas fa-table"></i> Lista de Pacientes</h2>
+                <span class="badge badge-info" id="patientCount">0 pacientes</span>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table" id="patientsTable">
+                        <thead>
+                            <tr>
+                                <th>ID Paciente</th>
+                                <th>Edad</th>
+                                <th>Sexo</th>
+                                <th>Diagnóstico</th>
+                                <th>Fecha Ingreso</th>
+                                <th>Origen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="patientsBody">
+                            <tr>
+                                <td colspan="6" class="text-center">Cargando pacientes...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>Hospital AI System &copy; 2026 | Sistema Inteligente de Soporte Hospitalario</p>
+    </footer>
+
+    <script>
+        let allPatients = [];
+
+        async function loadPatients() {
+            const limit = document.getElementById('limitSelect').value;
+            try {
+                const resp = await fetch(`/api/patients?limit=${limit}`);
+                const data = await resp.json();
+                allPatients = data;
+                renderTable(allPatients);
+            } catch (error) {
+                document.getElementById('patientsBody').innerHTML = `
+                    <tr><td colspan="6" class="text-center text-danger">
+                        <i class="fas fa-exclamation-circle"></i> Error: ${error.message}
+                    </td></tr>
+                `;
+            }
+        }
+
+        function renderTable(patients) {
+            const tbody = document.getElementById('patientsBody');
+            document.getElementById('patientCount').textContent = `${patients.length} pacientes`;
+
+            if (patients.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center">No se encontraron pacientes</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = patients.map(p => {
+                const diagClass = p.diagnosis === 'COVID19' ? 'badge-danger' : 
+                               p.diagnosis === 'Pneumonia' ? 'badge-warning' : 'badge-success';
+                const sexIcon = p.sex === 'M' ? 'fa-mars' : 'fa-venus';
+                
+                return `
+                    <tr>
+                        <td><strong>${p.patient_id || '-'}</strong></td>
+                        <td>${p.age || '-'}</td>
+                        <td><i class="fas ${sexIcon}"></i> ${p.sex || '-'}</td>
+                        <td><span class="badge ${diagClass}">${p.diagnosis || '-'}</span></td>
+                        <td>${p.admission_date || '-'}</td>
+                        <td>${p.source || '-'}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function filterTable() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const diagnosis = document.getElementById('diagnosisFilter').value;
+
+            let filtered = allPatients;
+
+            if (search) {
+                filtered = filtered.filter(p => 
+                    (p.patient_id || '').toLowerCase().includes(search)
+                );
+            }
+
+            if (diagnosis) {
+                filtered = filtered.filter(p => p.diagnosis === diagnosis);
+            }
+
+            renderTable(filtered);
+        }
+
+        function reloadTable() {
+            loadPatients();
+        }
+
+        // Load on page load
+        loadPatients();
+
+        // Auto-refresh every 30 seconds
+        setInterval(loadPatients, 30000);
+    </script>
+</body>
+</html>

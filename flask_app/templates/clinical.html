@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clínica - Hospital AI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <i class="fas fa-hospital"></i>
+                <span>Hospital AI System</span>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-link"><i class="fas fa-home"></i> Inicio</a>
+                <a href="/radiology" class="nav-link"><i class="fas fa-x-ray"></i> Radiología</a>
+                <a href="/clinical" class="nav-link active"><i class="fas fa-stethoscope"></i> Clínica</a>
+                <a href="/patients" class="nav-link"><i class="fas fa-users"></i> Pacientes</a>
+                <a href="/alerts" class="nav-link"><i class="fas fa-exclamation-triangle"></i> Alertas</a>
+                <a href="/api-info" class="nav-link"><i class="fas fa-info-circle"></i> API Info</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="header-section">
+            <h1><i class="fas fa-stethoscope"></i> Predicción Clínica</h1>
+            <p class="subtitle">Evalúa riesgos de enfermedades basado en síntomas</p>
+        </div>
+
+        <div class="card" style="max-width: 900px; margin: 0 auto 2rem;">
+            <div class="card-header">
+                <h2><i class="fas fa-clipboard-check"></i> Formulario Clínico</h2>
+            </div>
+            <div class="card-body">
+                <form id="clinicalForm">
+                    <!-- Patient Data -->
+                    <div class="form-section">
+                        <h3><i class="fas fa-user"></i> Datos del Paciente</h3>
+                        <div class="form-row">
+                            <div class="form-group" style="flex: 1;">
+                                <label for="age"><i class="fas fa-birthday-cake"></i> Edad</label>
+                                <input type="number" id="age" name="age" class="form-control" min="18" max="100" value="45" required>
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label for="sex"><i class="fas fa-venus-mars"></i> Sexo</label>
+                                <select id="sex" name="sex" class="form-control" required>
+                                    <option value="M">Masculino</option>
+                                    <option value="F">Femenino</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="flex: 1;">
+                                <label for="height"><i class="fas fa-ruler-vertical"></i> Altura (cm)</label>
+                                <input type="number" id="height" name="height_cm" class="form-control" min="140" max="220" value="170" step="0.1" required>
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label for="weight"><i class="fas fa-weight-hanging"></i> Peso (kg)</label>
+                                <input type="number" id="weight" name="weight_kg" class="form-control" min="40" max="200" value="75" step="0.1" required>
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label><i class="fas fa-calculator"></i> IMC</label>
+                                <input type="text" id="bmi" class="form-control" readonly>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Symptoms -->
+                    <div class="form-section">
+                        <h3><i class="fas fa-notes-medical"></i> Síntomas</h3>
+                        <div class="symptoms-grid">
+                            <div class="symptom-item">
+                                <input type="checkbox" id="cough" name="has_cough">
+                                <label for="cough"><i class="fas fa-cough"></i> Tos</label>
+                            </div>
+                            <div class="symptom-item">
+                                <input type="checkbox" id="chest_pain" name="has_chest_pain">
+                                <label for="chest_pain"><i class="fas fa-heartbeat"></i> Dolor de pecho</label>
+                            </div>
+                            <div class="symptom-item">
+                                <input type="checkbox" id="fatigue" name="has_fatigue">
+                                <label for="fatigue"><i class="fas fa-tired"></i> Fatiga</label>
+                            </div>
+                            <div class="symptom-item">
+                                <input type="checkbox" id="fever" name="has_fever">
+                                <label for="fever"><i class="fas fa-thermometer-full"></i> Fiebre</label>
+                            </div>
+                            <div class="symptom-item">
+                                <input type="checkbox" id="dizziness" name="has_dizziness">
+                                <label for="dizziness"><i class="fas fa-dizzy"></i> Mareos</label>
+                            </div>
+                            <div class="symptom-item">
+                                <input type="checkbox" id="breathing" name="has_breathing_difficulty">
+                                <label for="breathing"><i class="fas fa-lungs"></i> Dificultad respiratoria</label>
+                            </div>
+                            <div class="symptom-item">
+                                <input type="checkbox" id="headache" name="has_headache">
+                                <label for="headache"><i class="fas fa-head-side-cough"></i> Dolor de cabeza</label>
+                            </div>
+                            <div class="symptom-item">
+                                <input type="checkbox" id="nausea" name="has_nausea">
+                                <label for="nausea"><i class="fas fa-smog"></i> Nausea</label>
+                            </div>
+                            <div class="symptom-item">
+                                <input type="checkbox" id="appetite" name="has_loss_of_appetite">
+                                <label for="appetite"><i class="fas fa-utensils"></i> Pérdida de apetito</label>
+                            </div>
+                            <div class="symptom-item">
+                                <input type="checkbox" id="sweats" name="has_night_sweats">
+                                <label for="sweats"><i class="fas fa-water"></i> Sudores nocturnos</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary" id="submitBtn">
+                            <i class="fas fa-stethoscope"></i> Predecir Riesgos
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="resetForm()">
+                            <i class="fas fa-redo"></i> Limpiar
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Loading -->
+                <div id="loadingDiv" style="display: none;" class="text-center mt-3">
+                    <div class="spinner"></div>
+                    <p>Evaluando riesgos...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results -->
+        <div id="resultDiv" style="display: none;" class="card" style="max-width: 900px; margin: 0 auto;">
+            <div class="card-header">
+                <h2><i class="fas fa-clipboard-check"></i> Resultado de la Evaluación</h2>
+            </div>
+            <div class="card-body">
+                <div class="risk-grid">
+                    <!-- Diabetes -->
+                    <div class="risk-card" id="diabetesCard">
+                        <div class="risk-header">
+                            <i class="fas fa-tint"></i>
+                            <h3>Diabetes</h3>
+                        </div>
+                        <div class="risk-meter">
+                            <div class="risk-fill" id="diabetesBar"></div>
+                        </div>
+                        <p class="risk-prob" id="diabetesProb">0%</p>
+                        <span class="badge" id="diabetesBadge">-</span>
+                    </div>
+
+                    <!-- Hypertension -->
+                    <div class="risk-card" id="hypertensionCard">
+                        <div class="risk-header">
+                            <i class="fas fa-heart"></i>
+                            <h3>Hipertensión</h3>
+                        </div>
+                        <div class="risk-meter">
+                            <div class="risk-fill" id="hypertensionBar"></div>
+                        </div>
+                        <p class="risk-prob" id="hypertensionProb">0%</p>
+                        <span class="badge" id="hypertensionBadge">-</span>
+                    </div>
+
+                    <!-- Heart Disease -->
+                    <div class="risk-card" id="heartCard">
+                        <div class="risk-header">
+                            <i class="fas fa-heartbeat"></i>
+                            <h3>Enfermedad Cardíaca</h3>
+                        </div>
+                        <div class="risk-meter">
+                            <div class="risk-fill" id="heartBar"></div>
+                        </div>
+                        <p class="risk-prob" id="heartProb">0%</p>
+                        <span class="badge" id="heartBadge">-</span>
+                    </div>
+                </div>
+
+                <!-- Overall Risk -->
+                <div class="mt-3" style="text-align: center;">
+                    <h3>Nivel de Riesgo General:</h3>
+                    <div class="risk-level-display" id="riskLevelDisplay">
+                        <span class="badge badge-large" id="riskLevelBadge">BAJO</span>
+                    </div>
+                    <p class="mt-2">
+                        <i class="fas fa-clock"></i> Tiempo de evaluación: 
+                        <strong id="inferenceTime">-</strong> ms
+                    </p>
+                    <p>
+                        <i class="fas fa-calendar"></i> Fecha: 
+                        <strong id="predictionTime">-</strong>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error -->
+        <div id="errorDiv" style="display: none;" class="alert alert-danger">
+            <i class="fas fa-exclamation-circle"></i>
+            <strong>Error:</strong> <span id="errorMessage"></span>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>Hospital AI System &copy; 2026 | Sistema Inteligente de Soporte Hospitalario</p>
+    </footer>
+
+    <script>
+        // Auto-calculate BMI
+        const heightInput = document.getElementById('height');
+        const weightInput = document.getElementById('weight');
+        const bmiInput = document.getElementById('bmi');
+
+        function updateBMI() {
+            const h = parseFloat(heightInput.value) / 100;
+            const w = parseFloat(weightInput.value);
+            if (h > 0 && w > 0) {
+                const bmi = (w / (h * h)).toFixed(1);
+                bmiInput.value = bmi;
+            }
+        }
+
+        heightInput.addEventListener('input', updateBMI);
+        weightInput.addEventListener('input', updateBMI);
+        updateBMI();
+
+        // Form submission
+        const form = document.getElementById('clinicalForm');
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const data = {
+                age: parseInt(document.getElementById('age').value),
+                sex: document.getElementById('sex').value,
+                height_cm: parseFloat(document.getElementById('height').value),
+                weight_kg: parseFloat(document.getElementById('weight').value),
+                has_cough: document.getElementById('cough').checked,
+                has_chest_pain: document.getElementById('chest_pain').checked,
+                has_fatigue: document.getElementById('fatigue').checked,
+                has_fever: document.getElementById('fever').checked,
+                has_dizziness: document.getElementById('dizziness').checked,
+                has_breathing_difficulty: document.getElementById('breathing').checked,
+                has_headache: document.getElementById('headache').checked,
+                has_nausea: document.getElementById('nausea').checked,
+                has_loss_of_appetite: document.getElementById('appetite').checked,
+                has_night_sweats: document.getElementById('sweats').checked,
+            };
+
+            document.getElementById('loadingDiv').style.display = 'block';
+            document.getElementById('resultDiv').style.display = 'none';
+            document.getElementById('errorDiv').style.display = 'none';
+
+            try {
+                const response = await fetch('/clinical/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) throw new Error(result.error || 'Error en la predicción');
+
+                showResult(result);
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                document.getElementById('loadingDiv').style.display = 'none';
+            }
+        });
+
+        function showResult(data) {
+            const probs = data.probabilities;
+
+            // Diabetes
+            updateRiskCard('diabetes', probs.diabetes_risk || 0, data.diabetes_risk);
+            
+            // Hypertension
+            updateRiskCard('hypertension', probs.hypertension_risk || 0, data.hypertension_risk);
+            
+            // Heart Disease
+            updateRiskCard('heart', probs.heart_disease_risk || 0, data.heart_disease_risk);
+
+            // Overall risk level
+            const riskBadge = document.getElementById('riskLevelBadge');
+            const level = data.risk_level || 'bajo';
+            riskBadge.textContent = level.toUpperCase();
+            riskBadge.className = 'badge badge-large ' + 
+                (level === 'alto' ? 'badge-danger' : level === 'moderado' ? 'badge-warning' : 'badge-success');
+
+            // Meta info
+            document.getElementById('inferenceTime').textContent = data.inference_time_ms || '-';
+            document.getElementById('predictionTime').textContent = data.timestamp ? data.timestamp.substring(0, 19) : '-';
+
+            document.getElementById('resultDiv').style.display = 'block';
+        }
+
+        function updateRiskCard(prefix, prob, isRisk) {
+            const pct = (prob * 100).toFixed(1);
+            const bar = document.getElementById(prefix + 'Bar');
+            const probSpan = document.getElementById(prefix + 'Prob');
+            const badge = document.getElementById(prefix + 'Badge');
+
+            bar.style.width = pct + '%';
+            probSpan.textContent = pct + '%';
+            
+            if (isRisk) {
+                badge.textContent = 'RIESGO';
+                badge.className = 'badge badge-danger';
+                document.getElementById(prefix + 'Card').style.borderLeftColor = '#f5576c';
+            } else {
+                badge.textContent = 'BAJO';
+                badge.className = 'badge badge-success';
+                document.getElementById(prefix + 'Card').style.borderLeftColor = '#43e97b';
+            }
+        }
+
+        function showError(msg) {
+            document.getElementById('errorMessage').textContent = msg;
+            document.getElementById('errorDiv').style.display = 'block';
+        }
+
+        function resetForm() {
+            form.reset();
+            document.getElementById('resultDiv').style.display = 'none';
+            updateBMI();
+        }
+    </script>
+</body>
+</html>
