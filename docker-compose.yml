@@ -287,13 +287,8 @@ services:
     environment:
       FLASK_ENV: production
       PYTHONPATH: /app
-    volumes:
-      - ./flask_app:/app/flask_app
-      - ./clinical_ai:/app/clinical_ai
-      - ./src:/app/src
-      - ./config:/app/config
-      - ./models:/app/models
-      - ./data:/app/data
+      RADIOLOGY_API: http://api:8000
+      CLINICAL_API: http://clinical-api:8001
     depends_on:
       api:
         condition: service_started

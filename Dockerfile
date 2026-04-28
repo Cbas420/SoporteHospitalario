@@ -22,11 +22,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY flask_app/requirements.txt /tmp/flask-requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir -r /tmp/flask-requirements.txt
 
 COPY config/ config/
 COPY src/ src/
 COPY scripts/ scripts/
+COPY flask_app/ flask_app/
 COPY train_pipeline.py .
 COPY generate_sample_data.py .
 COPY streamlit_app.py .
@@ -35,7 +38,7 @@ RUN mkdir -p /app/data/raw /app/data/processed /app/data/incoming /app/models
 
 VOLUME ["/app/data", "/app/models"]
 
-EXPOSE 8000 8501
+EXPOSE 8000 8501 5000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:${API_PORT}/health || exit 1
