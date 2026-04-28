@@ -211,8 +211,7 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-    profiles:
-      - training
+    restart: "no"
     networks:
       - hospital-network
 
@@ -224,8 +223,7 @@ services:
     command: python generate_sample_data.py --num-per-class 50
     volumes:
       - ./data:/app/data
-    profiles:
-      - setup
+    restart: "no"
     networks:
       - hospital-network
 

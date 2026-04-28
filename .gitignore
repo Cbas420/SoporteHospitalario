@@ -41,6 +41,7 @@ mnt/
 
 # Training artifacts and generated models
 models/
+!clinical_ai/models/
 
 # Generated or local datasets
 data/raw/

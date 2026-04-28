@@ -64,6 +64,7 @@ def generate_patient(
         "patient_id": f"CLIN_{patient_id:06d}",
         "age": age,
         "sex": sex,
+        "sex_encoded": 0 if sex == "M" else 1,
         "height_cm": round(height, 1),
         "weight_kg": round(weight, 1),
         "bmi": round(bmi, 2),
@@ -83,6 +84,7 @@ def determine_risks(patient: dict, patient_id: int) -> dict:
     has_night_sweats = int(patient["has_night_sweats"])
     has_dizziness = int(patient["has_dizziness"])
     has_nausea = int(patient["has_nausea"])
+    has_headache = int(patient["has_headache"])
 
     base_diabetes = (
         0.02

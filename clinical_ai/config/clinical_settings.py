@@ -42,7 +42,7 @@ DISEASE_COLUMNS = [
 
 ALL_FEATURES = [
     "age",
-    "sex",
+    "sex_encoded",
     "height_cm",
     "weight_kg",
     "bmi",
