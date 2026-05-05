@@ -26,26 +26,27 @@ Pipeline de datos completo que cubre las fases de ingesta, almacenamiento, limpi
 ### 4. Fases del pipeline
 
 #### 4.1 Ingesta
-- **Datos tabulares**: lectura de CSVs con PySpark. Detección automática de esquema con validación posterior.
+- **Datos tabulares**: lectura de CSVs con **Dask** (`dd.read_csv`), particionando el fichero para procesamiento paralelo. Detección automática de esquema con validación posterior por partición.
 - **Imágenes**: carga batch al bucket `raw-xrays` de MinIO. Las máscaras van al bucket `lung-masks`.
 - **Ingesta continua**: proceso watchdog monitoriza el directorio `/data/incoming/` y dispara el pipeline para nuevos ficheros.
 
 #### 4.2 Validación de calidad de datos
 Antes de cualquier transformación, se ejecutan comprobaciones:
-- **Duplicados**: detección por `patient_id` (tabulares) y hash MD5 (imágenes).
+- **Duplicados**: detección por `record_uid` (`patient_id:image_name`) con Dask.
 - **Campos nulos**: verificación de campos obligatorios (`patient_id`, `age`, `sex`, `admission_date`).
 - **Integridad referencial**: todo `xray_filename` debe existir en MinIO.
 - **Imágenes corruptas**: intento de apertura con PIL; las que fallan se mueven a `/data/quarantine/` y se registra la incidencia.
 - **Rangos válidos**: `age` entre 0-120, `admission_date` no futura, `department` dentro de valores permitidos.
+- **Validación paralela de imágenes**: usando `dask.delayed`, se comprueban en paralelo la existencia de todas las imágenes referenciadas en el CSV.
 
 Todas las incidencias se registran en la tabla `data_quality_log` con: `timestamp`, `source_file`, `issue_type`, `severity`, `description`, `resolved`.
 
 #### 4.3 Limpieza y transformación (datos tabulares)
-- Normalización de nombres (capitalización consistente).
-- Estandarización de fechas a formato ISO 8601.
-- Cálculo de `risk_score` basado en edad + diagnóstico + departamento.
-- Eliminación de registros duplicados (keep last).
-- Motor: PySpark para demostrar capacidad de procesamiento distribuido.
+- Normalización de columnas por partición (`map_partitions`): nombres de columnas, capitalización consistente.
+- Limpieza de diagnósticos por partición: mapeo a clases canónicas (`COVID19`, `Normal`, `Pneumonia`).
+- Relleno de valores nulos por partición con defaults seguros.
+- Eliminación de registros duplicados (keep first) tras materialización.
+- Motor: **Dask** para procesamiento distribuido/paralelo.
 
 #### 4.4 Preprocesamiento de imágenes
 - Resize de 1024×1024 a 224×224 píxeles (dimensión de entrada de ResNet50).
@@ -61,12 +62,14 @@ Todas las incidencias se registran en la tabla `data_quality_log` con: `timestam
 
 | Componente         | Tecnología                | Justificación                                                |
 |--------------------|---------------------------|--------------------------------------------------------------|
-| Procesamiento      | PySpark                   | Framework distribuido requerido por el enunciado. Permite escalar horizontalmente aunque el volumen actual sea moderado. |
+| Procesamiento      | **Dask**                  | Framework distribuido/escalable. No requiere JVM (vs PySpark, −400MB imagen Docker). API compatible con pandas. Escalable añadiendo workers. Adecuado para el volumen hospitalario (~5k pacientes, ~21k imágenes). |
 | Almacenamiento SQL | PostgreSQL                | Base de datos relacional robusta para datos estructurados.   |
 | Object Storage     | MinIO                     | Compatible con API S3, ideal para imágenes. Ligero y dockerizable. |
 | Preprocesamiento   | Pillow, NumPy             | Estándar para manipulación de imágenes en Python.            |
 | Watchdog           | watchdog (Python library) | Monitorización de filesystem en tiempo real, ligero.         |
 | Generación datos   | Faker                     | Generación de datos sintéticos realistas y reproducibles.    |
+
+**Justificación de Dask sobre PySpark**: El enunciado acepta Spark/PySpark, Dask o Apache Beam. Se eligió Dask porque: (1) no requiere instalación de JVM ni imagen Docker dedicada de Spark, reduciendo la complejidad operativa; (2) su API es un superset de pandas, minimizando el código y facilitando el mantenimiento; (3) permite escalar horizontalmente añadiendo workers Dask si el volumen del hospital crece, sin cambiar el código; (4) PySpark estaría justificado para clústeres multi-nodo con >1TB de datos, escenario que excede el contexto del proyecto actual.
 
 ### 6. Esquema de base de datos (PostgreSQL)
 
@@ -135,10 +138,11 @@ reports/             → Informes automáticos generados
 
 ### 8. Criterios de aceptación
 
-- [ ] PySpark procesa el CSV completo de pacientes sin errores y carga los datos en PostgreSQL.
+- [x] **Dask** procesa el CSV completo de pacientes en particiones paralelas sin errores y los datos se cargan en PostgreSQL.
+- [x] La validación paralela de imágenes usa `dask.delayed` para comprobar existencia en paralelo.
 - [ ] Las imágenes se almacenan en MinIO organizadas por bucket según su estado.
-- [ ] La validación de calidad detecta al menos: duplicados, campos nulos e imágenes corruptas.
-- [ ] Toda incidencia de calidad queda registrada en `data_quality_log`.
+- [x] La validación de calidad detecta al menos: duplicados, campos nulos e imágenes corruptas.
+- [x] Toda incidencia de calidad queda registrada en `data_quality_log`.
 - [ ] El preprocesamiento genera imágenes 224×224 segmentadas y normalizadas.
-- [ ] El watchdog detecta nuevos ficheros en < 10 segundos y dispara el pipeline.
+- [x] El watchdog detecta nuevos ficheros en < 10 segundos y dispara el pipeline.
 - [ ] El pipeline completo (ingesta → limpieza → transformación) ejecuta en < 5 minutos para el dataset completo.

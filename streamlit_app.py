@@ -505,6 +505,28 @@ elif page == "📊 Calidad de Datos":
 
         st.divider()
 
+        # Motor de procesamiento Dask
+        engine_info = pipeline_report.get("processing_engine", {})
+        dask_details = engine_info.get("details", {})
+        if engine_info:
+            st.subheader("Motor de procesamiento distribuido (Dask)")
+            d1, d2, d3, d4 = st.columns(4)
+            d1.metric("Framework", engine_info.get("framework", "N/A"))
+            d2.metric("Particiones", dask_details.get("npartitions", "N/A"))
+            d3.metric("Registros procesados", dask_details.get("input_rows", 0))
+            d4.metric(
+                "Tiempo proceso CSV",
+                f"{dask_details.get('processing_time_ms', 0):.0f} ms",
+            )
+
+            img_val = dask_details.get("image_validation", {})
+            if img_val:
+                iv1, iv2 = st.columns(2)
+                iv1.metric("Imagenes validadas (paralelo)", img_val.get("total", 0))
+                iv2.metric("Imagenes faltantes detectadas", img_val.get("missing", 0))
+
+        st.divider()
+
         # Estado del almacenamiento
         st.subheader("Estado del almacenamiento")
         obj_storage = storage_info.get("object_storage", {})

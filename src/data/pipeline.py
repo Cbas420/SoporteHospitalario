@@ -24,6 +24,7 @@ from config.settings import (
     PIPELINE_REPORT_PATH,
     RAW_DATA_DIR,
 )
+from src.data.dask_pipeline import run_dask_csv_processing, validate_images_parallel
 from src.data.loader import generate_dataset_report, scan_dataset
 from src.utils.logger import get_logger
 
@@ -174,13 +175,18 @@ def prepare_patient_dataset(
         encoding="utf-8",
     )
 
-    if csv_path.exists():
-        raw_df = pd.read_csv(csv_path)
-    else:
+    # --- Fase de ingesta y limpieza CSV con Dask ---
+    # Dask procesa el CSV en particiones paralelas: normalizacion de columnas,
+    # limpieza de diagnosticos y deduplicacion por particion.
+    dask_df, dask_report = run_dask_csv_processing(csv_path)
+
+    if dask_df.empty:
         raw_df = pd.DataFrame(columns=PATIENTS_CANONICAL_FIELDS)
+    else:
+        raw_df = dask_df
 
     standardized = _standardize_patient_dataframe(raw_df)
-    input_rows = len(standardized)
+    input_rows = dask_report["input_rows"]
 
     standardized["diagnosis"] = standardized["diagnosis"].apply(normalize_diagnosis)
     standardized["image_name"] = standardized["image_name"].fillna("").astype(str)
@@ -265,6 +271,7 @@ def prepare_patient_dataset(
         "invalid_diagnoses_removed": invalid_diagnoses_removed,
         "missing_images_removed": missing_images_removed,
         "manifest_records": int(len(manifest_records)),
+        "dask": dask_report,
     }
 
     return cleaned, report
@@ -288,6 +295,11 @@ def prepare_data_pipeline(
         "status": "ready" if len(patients_df) > 0 else "empty",
         "patients": cleaning_report,
         "dataset": dataset_report,
+        "processing_engine": {
+            "framework": "Dask",
+            "version": "2024.2.0",
+            "details": cleaning_report.get("dask", {}),
+        },
         "storage": {
             "database": "PostgreSQL/SQLite via SQLAlchemy",
             "object_storage": get_object_storage_status(),

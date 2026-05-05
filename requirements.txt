@@ -12,6 +12,9 @@ numpy==1.26.3
 pandas==2.1.4
 Pillow==10.2.0
 
+# Procesamiento distribuido / Big Data
+dask[dataframe]==2024.2.0
+
 # Visualizacion
 matplotlib==3.8.2
 seaborn==0.13.1
