@@ -30,6 +30,7 @@ COPY config/ config/
 COPY src/ src/
 COPY scripts/ scripts/
 COPY flask_app/ flask_app/
+COPY clinical_ai/ clinical_ai/
 COPY train_pipeline.py .
 COPY generate_sample_data.py .
 COPY streamlit_app.py .

@@ -1,4 +1,9 @@
 services:
+
+  # ===========================================================================
+  # INFRAESTRUCTURA BASE
+  # ===========================================================================
+
   db:
     image: postgres:16-alpine
     container_name: hospital-db
@@ -13,6 +18,26 @@ services:
       - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U hospital -d hospital"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - hospital-network
+
+  clinical-db:
+    image: postgres:16-alpine
+    container_name: hospital-clinical-db
+    environment:
+      POSTGRES_DB: clinical_db
+      POSTGRES_USER: clinical
+      POSTGRES_PASSWORD: clinical
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./mnt/clinical-postgres:/var/lib/postgresql/data
+      - ./clinical_ai/sql/init_clinical.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clinical -d clinical_db"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -39,23 +64,48 @@ services:
     networks:
       - hospital-network
 
-  minio-init:
+  # ===========================================================================
+  # INICIALIZACION AUTOMATICA
+  # Ejecuta una sola vez antes de arrancar los servicios principales.
+  # Pasos: buckets MinIO → dataset (sintetico si no hay real) → modelo radiologia
+  # El modelo clinico viene pre-entrenado en el repo, no necesita init.
+  # ===========================================================================
+
+  hospital-init:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: hospital-minio-init
-    command: python scripts/init_minio_buckets.py
+    container_name: hospital-init
+    command: python scripts/init_system.py
     environment:
+      DATABASE_URL: postgresql://hospital:hospital@db:5432/hospital
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: medical-images
+      MINIO_BUCKET_RAW: raw-xrays
+      MINIO_BUCKET_MASKS: lung-masks
+      MINIO_BUCKET_PROCESSED: processed-xrays
+      MINIO_BUCKET_QUARANTINE: quarantine
+      MINIO_BUCKET_REPORTS: reports
       MINIO_SECURE: "false"
+      LOG_LEVEL: INFO
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./logs:/app/logs
     depends_on:
+      db:
+        condition: service_healthy
       minio:
         condition: service_healthy
-    restart: on-failure
+    restart: "no"
     networks:
       - hospital-network
+
+  # ===========================================================================
+  # APIS
+  # ===========================================================================
 
   api:
     build:
@@ -92,12 +142,73 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      hospital-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 30s
       retries: 5
-      start_period: 180s
+      start_period: 60s
+    networks:
+      - hospital-network
+
+  clinical-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hospital-clinical-api
+    command: python -m uvicorn clinical_ai.api.clinical_api:app --host 0.0.0.0 --port 8001
+    ports:
+      - "8001:8001"
+    environment:
+      CLINICAL_API_HOST: 0.0.0.0
+      CLINICAL_API_PORT: 8001
+      CLINICAL_DATABASE_URL: postgresql://clinical:clinical@clinical-db:5432/clinical_db
+    volumes:
+      - ./clinical_ai:/app/clinical_ai
+      - ./models:/app/models
+    depends_on:
+      clinical-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/clinical/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - hospital-network
+
+  # ===========================================================================
+  # INTERFACES DE USUARIO
+  # ===========================================================================
+
+  flask-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hospital-flask
+    command: python flask_app/app.py
+    ports:
+      - "5000:5000"
+    environment:
+      FLASK_ENV: production
+      PYTHONPATH: /app
+      RADIOLOGY_API: http://api:8000
+      CLINICAL_API: http://clinical-api:8001
+    depends_on:
+      hospital-init:
+        condition: service_completed_successfully
+      api:
+        condition: service_started
+      clinical-api:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     networks:
       - hospital-network
 
@@ -127,6 +238,10 @@ services:
     networks:
       - hospital-network
 
+  # ===========================================================================
+  # AUTOMATIZACION
+  # ===========================================================================
+
   automation:
     build:
       context: .
@@ -151,8 +266,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      api:
-        condition: service_started
+      hospital-init:
+        condition: service_completed_successfully
     healthcheck:
       disable: true
     networks:
@@ -181,12 +296,20 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      api:
-        condition: service_started
+      hospital-init:
+        condition: service_completed_successfully
     healthcheck:
       disable: true
     networks:
       - hospital-network
+
+  # ===========================================================================
+  # SERVICIOS DE ENTRENAMIENTO MANUAL
+  # No forman parte del docker-compose up normal.
+  # Usar para reentrenar con dataset real o mas epochs:
+  #   docker-compose run ai-train
+  #   docker-compose run ai-sample-data
+  # ===========================================================================
 
   ai-train:
     build:
@@ -212,6 +335,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+    profiles:
+      - training
     restart: "no"
     networks:
       - hospital-network
@@ -224,82 +349,9 @@ services:
     command: python generate_sample_data.py --num-per-class 50
     volumes:
       - ./data:/app/data
+    profiles:
+      - training
     restart: "no"
-    networks:
-      - hospital-network
-
-  # ===== NEW: Clinical Database =====
-  clinical-db:
-    image: postgres:16-alpine
-    container_name: hospital-clinical-db
-    environment:
-      POSTGRES_DB: clinical_db
-      POSTGRES_USER: clinical
-      POSTGRES_PASSWORD: clinical
-    ports:
-      - "5433:5432"
-    volumes:
-      - clinical_db_data:/var/lib/postgresql/data
-      - ./clinical_ai/sql/init_clinical.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U clinical -d clinical_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    networks:
-      - hospital-network
-
-  # ===== NEW: Clinical API (port 8001) =====
-  clinical-api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: hospital-clinical-api
-    command: python -m uvicorn clinical_ai.api.clinical_api:app --host 0.0.0.0 --port 8001
-    ports:
-      - "8001:8001"
-    environment:
-      CLINICAL_API_HOST: 0.0.0.0
-      CLINICAL_API_PORT: 8001
-      CLINICAL_DATABASE_URL: postgresql://clinical:clinical@clinical-db:5432/clinical_db
-    volumes:
-      - ./clinical_ai:/app/clinical_ai
-      - ./models:/app/models
-    depends_on:
-      clinical-db:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/clinical/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-    networks:
-      - hospital-network
-
-  # ===== NEW: Flask App (port 5000) =====
-  flask-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: hospital-flask
-    command: python flask_app/app.py
-    ports:
-      - "5000:5000"
-    environment:
-      FLASK_ENV: production
-      PYTHONPATH: /app
-      RADIOLOGY_API: http://api:8000
-      CLINICAL_API: http://clinical-api:8001
-    depends_on:
-      api:
-        condition: service_started
-      clinical-api:
-        condition: service_started
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
     networks:
       - hospital-network
 
@@ -309,7 +361,4 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_data:
-  minio_data:
   clinical_db_data:
-  shared_logs:
